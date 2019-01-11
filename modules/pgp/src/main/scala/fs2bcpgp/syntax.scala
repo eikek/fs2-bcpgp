@@ -3,29 +3,35 @@ package fs2bcpgp
 import java.nio.charset.{Charset, StandardCharsets}
 import java.io.{InputStream, OutputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import scala.concurrent.ExecutionContext
-import fs2.Stream
-import cats.effect.{Sync, Effect}
+import fs2._
+import cats.effect._
 import cats.implicits._
 import scodec.bits.ByteVector
 
 object syntax {
 
   implicit class StreamCrypt[F[_]](s: Stream[F, Byte]) {
-    def encryptPubkey(key: Pubkey, chunkSize: Int)(implicit F: Effect[F], ec: ExecutionContext): Stream[F, Byte] =
-      s.through(encrypt.pubkey(key, chunkSize))
+    def encryptPubkey(key: Pubkey, chunkSize: Int, blockingEc: ExecutionContext)
+      (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
+      s.through(encrypt.pubkey(key, chunkSize, blockingEc))
 
-    def decryptPubkey(ks: Keystore, pass: Long => Array[Char])(implicit F: Effect[F], ec: ExecutionContext): Stream[F, Byte] =
-      s.through(decrypt.pubkey(ks, pass))
+    def decryptPubkey(ks: Keystore, pass: Long => Array[Char], blockingEc: ExecutionContext)
+      (implicit F: ConcurrentEffect[F], ev: RaiseThrowable[F], CS: ContextShift[F]): Stream[F, Byte] =
+      s.through(decrypt.pubkey(ks, pass, blockingEc))
 
-    def encryptSymmetric(pass: Array[Char], chunkSize: Int, algo: SymmetricAlgo = SymmetricAlgo.default)(implicit F: Effect[F], ec: ExecutionContext): Stream[F, Byte] =
-      s.through(encrypt.symmetric(algo, pass, chunkSize))
+    def encryptSymmetric(pass: Array[Char], chunkSize: Int, blockingEc: ExecutionContext, algo: SymmetricAlgo = SymmetricAlgo.default)
+      (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
+      s.through(encrypt.symmetric(algo, pass, chunkSize, blockingEc))
 
-    def decryptSymmetric(pass: Array[Char])(implicit F: Effect[F], ec: ExecutionContext): Stream[F, Byte] =
-      s.through(decrypt.symmetric(pass))
+    def decryptSymmetric(pass: Array[Char], blockingEc: ExecutionContext)
+      (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
+      s.through(decrypt.symmetric(pass, blockingEc))
   }
 
 
-  private def pipeStreams[F[_], A, B](f: (InputStream, OutputStream) => F[Unit], to: A => Array[Byte], from: Array[Byte] => B)(implicit F: Sync[F]): A => F[B] = a => {
+  private def pipeStreams[F[_], A, B]
+    (f: (InputStream, OutputStream) => F[Unit], to: A => Array[Byte], from: Array[Byte] => B)
+    (implicit F: Sync[F]): A => F[B] = a => {
     val inout = F.delay {
         (new ByteArrayInputStream(to(a)), new ByteArrayOutputStream())
       }

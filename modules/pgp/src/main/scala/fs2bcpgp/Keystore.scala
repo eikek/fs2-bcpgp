@@ -1,10 +1,11 @@
 package fs2bcpgp
 
 import scodec.bits.ByteVector
-import cats.effect.{Effect, Sync}
+import cats.effect._
 import cats.Traverse
 import cats.implicits._
-import fs2.{io, text}
+import fs2._
+import scala.concurrent.ExecutionContext
 
 import scala.collection.JavaConverters._
 import java.nio.file.{Files, Path}
@@ -49,7 +50,7 @@ case class Keystore(public: PublicKeys, secret: SecretKeys) {
 
 object Keystore {
   // https://bouncycastle-pgp-cookbook.blogspot.de/2013_01_01_archive.html
-  def generate[F[_]](userID: String, pass: Array[Char], strength: Int = 4096)(implicit F: Sync[F]): F[Keystore] = F.delay {
+  def generate[F[_]: Sync](userID: String, pass: Array[Char], strength: Int = 4096): F[Keystore] = Sync[F].delay {
     val kpg = new RSAKeyPairGenerator()
     kpg.init(new RSAKeyGenerationParameters(
       java.math.BigInteger.valueOf(65537), //exponent
@@ -110,8 +111,10 @@ object Keystore {
     Keystore(PublicKeys(ByteVector.view(pub)), SecretKeys(ByteVector.view(sec)))
   }
 
-  def fromInputStream[F[_]](in: F[InputStream], closeAfterUse: Boolean = true)(implicit F: Effect[F]): F[Keystore] =
-    io.readInputStream[F](in, 8192, closeAfterUse).
+  def fromInputStream[F[_]: Sync : ContextShift](in: F[InputStream]
+    , blockingEc: ExecutionContext
+    , closeAfterUse: Boolean = true): F[Keystore] =
+    io.readInputStream[F](in, 8192, blockingEc, closeAfterUse).
       through(text.utf8Decode).
       through(text.lines).
       compile.toVector.flatMap(fromArmoredLines[F])
@@ -120,10 +123,10 @@ object Keystore {
     F.delay(Files.readAllLines(f).asScala).
       flatMap(lines => fromArmoredLines(lines))
 
-  def fromArmoredString[F[_]](armored: String)(implicit F: Sync[F]): F[Keystore] =
+  def fromArmoredString[F[_]: Sync](armored: String): F[Keystore] =
     fromArmoredLines(armored.split("\\r?\\n"))
 
-  private def fromArmoredLines[F[_]](lines: Iterable[String])(implicit F: Sync[F]): F[Keystore] = {
+  private def fromArmoredLines[F[_]: Sync](lines: Iterable[String]): F[Keystore] = {
     val (pub, sec, _, _) = lines.foldLeft(("", "", false, false)) { case ((publines, seclines, pub, sec), line) =>
       line match {
         case "-----BEGIN PGP PRIVATE KEY BLOCK-----" =>

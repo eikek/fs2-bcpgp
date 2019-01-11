@@ -4,15 +4,14 @@ import minitest._
 import cats.effect.IO
 import fs2.{io, text, Stream, Pipe, Chunk}
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import java.nio.file.Path
 import java.io._
 
-object EncryptSpec extends SimpleTestSuite with FileFixtures {
+object EncryptSpec extends SimpleTestSuite with FileFixtures with Imports.Defaults {
   val chunkSize = 8192
 
   def loadKeystore: IO[Keystore] =
-    Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream))
+    Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC)
 
   def asString: Pipe[IO, Byte, String] =
     _.through(text.utf8Decode).
@@ -24,8 +23,8 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures {
 
     val in = Stream.emits("hello world".getBytes).covary[IO]
 
-    val org = in.through(encrypt.pubkey[IO](key, chunkSize)).
-      through(decrypt.pubkey[IO](ks, _ => "test".toCharArray)).
+    val org = in.through(encrypt.pubkey[IO](key, chunkSize, blockingEC)).
+      through(decrypt.pubkey[IO](ks, _ => "test".toCharArray, blockingEC)).
       through(asString).
       compile.last.unsafeRunSync
 
@@ -43,21 +42,21 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures {
         intersperse("\n").
         take(800L).
         through(text.utf8Encode).
-        to(io.file.writeAll[IO](f)).
+        to(io.file.writeAll[IO](f, blockingEC)).
         compile.drain
 
     // encrypt
     def encryptFile(from: Path, to: Path) =
-      io.file.readAll[IO](from, 96 * 1024).
-        through(encrypt.pubkey[IO](key, chunkSize)).
-        to(io.file.writeAll[IO](to)).
+      io.file.readAll[IO](from, blockingEC, 96 * 1024).
+        through(encrypt.pubkey[IO](key, chunkSize, blockingEC)).
+        to(io.file.writeAll[IO](to, blockingEC)).
         compile.drain
 
     // decrypt
     def decryptFile(from: Path, to: Path) =
-      io.file.readAll[IO](from, 96 * 1024).
-        through(decrypt.pubkey[IO](ks, _ => "test".toCharArray)).
-        to(io.file.writeAll[IO](to)).
+      io.file.readAll[IO](from, blockingEC, 96 * 1024).
+        through(decrypt.pubkey[IO](ks, _ => "test".toCharArray, blockingEC)).
+        to(io.file.writeAll[IO](to, blockingEC)).
         compile.drain
 
     val test = withNonExistingFile { f1 =>
@@ -77,14 +76,13 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures {
     }
 
     test.unsafeRunSync
-
   }
 
   test ("encrypt stream symmetric") {
     val in = Stream.emits("hello world".getBytes).covary[IO]
     val pass = "hahaha".toCharArray
-    val org = in.through(encrypt.symmetric(SymmetricAlgo.AES256, pass, chunkSize)).
-      through(decrypt.symmetric(pass)).
+    val org = in.through(encrypt.symmetric(SymmetricAlgo.AES256, pass, chunkSize, blockingEC)).
+      through(decrypt.symmetric(pass, blockingEC)).
       through(asString).
       compile.last.unsafeRunSync
 
@@ -99,7 +97,7 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures {
     val out = new ByteArrayOutputStream()
     encrypt.pubkeySync[IO](in, key, out).unsafeRunSync
     val org = Stream.chunk(Chunk.bytes(out.toByteArray)).covary[IO].
-      through(decrypt.pubkey[IO](ks, _ => "test".toCharArray)).
+      through(decrypt.pubkey[IO](ks, _ => "test".toCharArray, blockingEC)).
       through(asString).
       compile.last.unsafeRunSync
     assertEquals(org, Some("hello world"))
@@ -111,7 +109,7 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures {
     val pass = "hahaha".toCharArray
     encrypt.symmetricSync[IO](in, SymmetricAlgo.Twofish, pass, out).unsafeRunSync
     val org = Stream.chunk(Chunk.bytes(out.toByteArray)).covary[IO].
-      through(decrypt.symmetric(pass)).
+      through(decrypt.symmetric(pass, blockingEC)).
       through(asString).
       compile.last.unsafeRunSync
     assertEquals(org, Some("hello world"))

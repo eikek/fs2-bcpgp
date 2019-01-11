@@ -9,7 +9,7 @@ import cats.effect.IO
 import minitest.api.Asserts
 
 trait FileFixtures {
-  self: Asserts =>
+  self: Asserts with Imports =>
 
   def withNonExistingFile[A](code: Path => IO[A]): IO[A] = {
     val prefix = Paths.get("target")
@@ -37,7 +37,7 @@ trait FileFixtures {
   }
 
   def fileHash(f: Path): IO[String] =
-    io.file.readAll[IO](f, 96 * 1024).
+    io.file.readAll[IO](f, blockingEC, 96 * 1024).
       through(fs2.hash.sha1).
       map(b => "%x".format(b)).
       fold1(_ ++ _).

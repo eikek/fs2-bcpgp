@@ -8,9 +8,9 @@ import org.bouncycastle.util.io.Streams
 import scala.collection.JavaConverters._
 
 import scala.concurrent.ExecutionContext
-import cats.effect.{Sync, Effect}
+import cats.effect._
 import cats.implicits._
-import fs2.{io, Stream, Pipe}
+import fs2._
 
 object decrypt {
   private def unwrapPGP(clear: InputStream): InputStream = {
@@ -28,10 +28,12 @@ object decrypt {
     ld.getInputStream
   }
 
-  private def readPGP[F[_]](bufferSize: Int)(implicit F: Sync[F]): Pipe[F, InputStream, Byte] = _.flatMap { clear =>
-    val unc = unwrapPGP(clear)
-    io.readInputStream(F.pure(unc), bufferSize)
-  }
+  private def readPGP[F[_]: Sync: ContextShift]
+    (bufferSize: Int, blockingEc: ExecutionContext): Pipe[F, InputStream, Byte] =
+    _.flatMap { clear =>
+      val unc = unwrapPGP(clear)
+      io.readInputStream(Sync[F].pure(unc), bufferSize, blockingEc)
+    }
 
   private def makeEncData[A <: PGPEncryptedData](in: InputStream): Iterator[A] = {
     val pgpf = new JcaPGPObjectFactory(in)
@@ -42,13 +44,16 @@ object decrypt {
     enc.asScala.map(_.asInstanceOf[A]).iterator
   }
 
-  private def encryptedData[F[_], A <: PGPEncryptedData](implicit F: Effect[F], ec:  ExecutionContext): Pipe[F, Byte, A] =
+  private def encryptedData[F[_]: ConcurrentEffect, A <: PGPEncryptedData]: Pipe[F, Byte, A] =
     _.through(io.toInputStream).
       map(makeEncData[A]).
       flatMap(it => Stream.fromIterator(it))
 
 
-  def pubkeySync[F[_]](in: InputStream, ks: Keystore, pass: Long => Array[Char], out: OutputStream)(implicit F: Sync[F]): F[Unit] = {
+  def pubkeySync[F[_]](in: InputStream
+    , ks: Keystore
+    , pass: Long => Array[Char]
+    , out: OutputStream)(implicit F: Sync[F]): F[Unit] = {
     def getKey: Long => F[PrivateKey] =
       id => ks.secret.find(id).flatMap {
         case Some(k) => k.extractPrivateKey(pass(id))
@@ -86,7 +91,8 @@ object decrypt {
     dec.map(a => a.foldLeft(()){ case (_, r) => r })
   }
 
-  def pubkey[F[_]](ks: Keystore, pass: Long => Array[Char])(implicit F: Effect[F], ec: ExecutionContext): Pipe[F, Byte, Byte] = in => {
+  def pubkey[F[_]: ConcurrentEffect: RaiseThrowable: ContextShift]
+    (ks: Keystore, pass: Long => Array[Char], blockingEc: ExecutionContext): Pipe[F, Byte, Byte] = in => {
     val clearText: Stream[F, InputStream] = in.
       through(encryptedData[F, PGPPublicKeyEncryptedData]).
       flatMap { pgpobj =>
@@ -99,20 +105,21 @@ object decrypt {
         }
       }
 
-    clearText.through(readPGP(8192))
+    clearText.through(readPGP(8192, blockingEc))
   }
 
-  def symmetric[F[_]](pass: Array[Char])(implicit F: Effect[F], ec: ExecutionContext): Pipe[F, Byte, Byte] = in => {
+  def symmetric[F[_]: ConcurrentEffect : ContextShift]
+    (pass: Array[Char], blockingEc: ExecutionContext): Pipe[F, Byte, Byte] = in => {
     val clearText: Stream[F, InputStream] = in.
       through(encryptedData[F, PGPPBEEncryptedData]).
       evalMap { pgpobj =>
-        F.delay(pgpobj.getDataStream(new JcePBEDataDecryptorFactoryBuilder(
+        Sync[F].delay(pgpobj.getDataStream(new JcePBEDataDecryptorFactoryBuilder(
           new JcaPGPDigestCalculatorProviderBuilder()
             .setProvider(Provider.name)
             .build())
           .setProvider(Provider.name).build(pass)))
       }
 
-    clearText.through(readPGP(8192))
+    clearText.through(readPGP(8192, blockingEc))
   }
 }

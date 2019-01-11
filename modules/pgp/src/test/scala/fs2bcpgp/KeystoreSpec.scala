@@ -1,12 +1,12 @@
 package fs2bcpgp
 
-import java.time.{Duration, Instant}
 import minitest._
+import java.time.{Duration, Instant}
 import cats.effect.IO
 
 import fs2bcpgp.SymmetricAlgo._
 
-object KeystoreSpec extends SimpleTestSuite {
+object KeystoreSpec extends SimpleTestSuite with Imports.Defaults {
 
   lazy val generated = Keystore.generate[IO]("eike", "test".toCharArray).unsafeRunSync
 
@@ -35,7 +35,7 @@ object KeystoreSpec extends SimpleTestSuite {
 
   test ("Read keystore from inputstream") {
     // generated via `gpg --quick-gen-key`
-    val ks = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream)).unsafeRunSync
+    val ks = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
     val pubkey = ks.public.findByUserID[IO]("test").unsafeRunSync.get
     assertEquals(pubkey.strength, 2048)
     assertEquals(pubkey.version, 4)
@@ -55,7 +55,7 @@ object KeystoreSpec extends SimpleTestSuite {
 
   test ("Concatenate keystore") {
     val ks0 = generated
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream)).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
     val ks = ks0 ++ ks1
 
     val pubkey0 = ks.public.findByUserID[IO]("eike").unsafeRunSync.get
@@ -65,7 +65,7 @@ object KeystoreSpec extends SimpleTestSuite {
   }
 
   test ("serialise / deserialise") {
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream)).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
     val ks1str = ks1.armored[IO].flatMap(Keystore.fromArmoredString[IO]).unsafeRunSync
     assertEquals(ks1, ks1str)
 
@@ -75,7 +75,7 @@ object KeystoreSpec extends SimpleTestSuite {
   }
 
   test ("checkPassword") {
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream)).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
     ks1.checkPassword[IO](_ => "test".toCharArray).map({ list1 =>
       assertEquals(list1.size, 1)
       assertEquals(list1(0), -2031006086266986872L -> true)

@@ -6,10 +6,12 @@ import org.bouncycastle.openpgp._
 import org.bouncycastle.openpgp.operator.jcajce._
 import org.bouncycastle.util.io.Streams
 
-import scala.concurrent.{SyncVar, ExecutionContext}
-import cats.effect.{Effect, Sync, IO}
+import scala.concurrent.ExecutionContext
 import cats.implicits._
-import fs2.{io, async, Stream, Pipe, Chunk, Segment}
+import cats.effect._
+//import cats.effect.implicits._
+import fs2._
+import fs2.concurrent.Queue
 
 object encrypt {
 
@@ -41,48 +43,59 @@ object encrypt {
   def pubkeySync[F[_]](in: InputStream, key: Pubkey, out: OutputStream, name: String = "")(implicit F: Sync[F]): F[Unit] =
     encryptSync(F.delay(makePKEncryptGenerator(key)), in, out, name)
 
-  def symmetricSync[F[_]](in: InputStream, algo: SymmetricAlgo, pass: Array[Char], out: OutputStream, name: String = "")(implicit F: Sync[F]): F[Unit] =
-    encryptSync(F.delay(makePBEEncryptGenerator(algo, pass)), in, out, name)
+  def symmetricSync[F[_]: Sync](in: InputStream, algo: SymmetricAlgo, pass: Array[Char], out: OutputStream, name: String = ""): F[Unit] =
+    encryptSync(Sync[F].delay(makePBEEncryptGenerator(algo, pass)), in, out, name)
 
-  private def encryptSync[F[_]](encGen: F[PGPEncryptedDataGenerator], in: InputStream, out: OutputStream, name: String)(implicit F: Sync[F]): F[Unit] = {
+  private def encryptSync[F[_]](encGen: F[PGPEncryptedDataGenerator]
+    , in: InputStream
+    , out: OutputStream
+    , name: String)(implicit F: Sync[F]): F[Unit] = {
     val cout = encGen.map(_.open(out, makeBuffer))
     val literalGen = new PGPLiteralDataGenerator()
-    Stream.bracket(cout)(
-      c => Stream.bracket(F.delay(literalGen.open(c, PGPLiteralData.BINARY, name, new java.util.Date(), makeBuffer)))(
-        p => Stream.eval(F.delay(Streams.pipeAll(in, p))),
-        p => F.delay(p.close())),
-      c => F.delay(c.close())).compile.drain
+    Stream.bracket(cout)(c => F.delay(c.close())).
+      flatMap(c =>
+        Stream.bracket(F.delay(literalGen.open(c, PGPLiteralData.BINARY, name, new java.util.Date(), makeBuffer))) (p => F.delay(p.close())).
+          flatMap(p => Stream.eval(F.delay(Streams.pipeAll(in, p))))).
+      compile.drain
   }
 
-  def pubkey[F[_]](key: Pubkey, chunkSize: Int, name: String = "")(implicit F: Effect[F], ec: ExecutionContext): Pipe[F, Byte, Byte] =
-    encryptWith[F](makePKEncryptGenerator(key), chunkSize, name)
+  def pubkey[F[_]](key: Pubkey
+    , chunkSize: Int
+    , blockingEc: ExecutionContext
+    , name: String = "")(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Pipe[F, Byte, Byte] =
+    encryptWith[F](makePKEncryptGenerator(key), chunkSize, blockingEc, name)
 
-  def symmetric[F[_]](algo: SymmetricAlgo, pass: Array[Char], chunkSize: Int, name: String = "")(implicit F: Effect[F], ec: ExecutionContext): Pipe[F, Byte, Byte] =
-    encryptWith(makePBEEncryptGenerator(algo, pass), chunkSize, name)
+  def symmetric[F[_]: ConcurrentEffect : ContextShift](algo: SymmetricAlgo
+    , pass: Array[Char]
+    , chunkSize: Int
+    , blockingEc: ExecutionContext
+    , name: String = ""): Pipe[F, Byte, Byte] =
+    encryptWith(makePBEEncryptGenerator(algo, pass), chunkSize, blockingEc, name)
 
 
-  private def encryptWith[F[_]](encGen: PGPEncryptedDataGenerator, chunkSize: Int, name: String)(implicit F: Effect[F], ec: ExecutionContext): Pipe[F, Byte, Byte] = in => {
-    Stream.eval(async.synchronousQueue[F, Option[Chunk[Byte]]]).flatMap { q =>
+  private def encryptWith[F[_]](encGen: PGPEncryptedDataGenerator
+    , chunkSize: Int
+    , blockingEc: ExecutionContext
+    , name: String)(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Pipe[F, Byte, Byte] = in => {
+    Stream.eval(Queue.synchronous[F, Option[Chunk[Byte]]]).flatMap { q =>
 
       val outs = F.delay {
         val out = new OutputStream {
           var chunk: Chunk[Byte] = Chunk.empty
 
           private def addChunkSync(c: Option[Chunk[Byte]]): Unit = {
-            val done = new SyncVar[Either[Throwable, Unit]]
-            async.unsafeRunAsync(q.enqueue1(c))(e => IO(done.put(e)))
-            done.get.fold(throw _, identity)
+            Effect[F].toIO(q.enqueue1(c)).unsafeRunSync
           }
 
           @annotation.tailrec
           private def addChunk(c: Chunk[Byte]): Unit = {
             val free = chunkSize - chunk.size
             if (c.size > free) {
-              addChunkSync(Some((Segment.chunk(chunk) ++ Segment.chunk(c.take(free))).force.toChunk))
+              addChunkSync(Some(Chunk.concat(Seq(chunk, c.take(free)))))
               chunk = Chunk.empty
               addChunk(c.drop(free))
             } else {
-              chunk = (Segment.chunk(chunk) ++ Segment.chunk(c)).force.toChunk
+              chunk = Chunk.concat(Seq(chunk, c))
             }
           }
 
@@ -106,15 +119,13 @@ object encrypt {
         (out, cout, pout)
       }
 
-      def write  = Stream.bracket(outs)(
-        { case (out, cout, pout) =>
-          in.to(io.writeOutputStream(F.pure(pout), closeAfterUse = false))
-        },
-        { case (out, cout, pout) => F.delay {
+      def write  = Stream.bracket(outs)({ case (out, cout, pout) => F.delay {
           pout.close()
           cout.close()
           out.close()
-        }})
+        }}).flatMap({ case (out, cout, pout) =>
+          in.to(io.writeOutputStream(F.pure(pout), blockingEc, closeAfterUse = false))
+        })
 
       Stream.suspend {
         q.dequeue

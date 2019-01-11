@@ -6,13 +6,12 @@ object libs {
 
   // https://github.com/typelevel/cats
   // MIT http://opensource.org/licenses/mit-license.php
-  val `cats-core` = "org.typelevel" %% "cats-core" % "1.1.0"
+  val `cats-core` = "org.typelevel" %% "cats-core" % "1.5.0"
 
   // https://github.com/functional-streams-for-scala/fs2
   // MIT
-  val `fs2-core` = "co.fs2" %% "fs2-core" % "0.10.7"
-  val `fs2-io` = "co.fs2" %% "fs2-io" % "0.10.7"
-  val `fs2-scodec` = "co.fs2" %% "fs2-scodec" % "0.10.7"
+  val `fs2-core` = "co.fs2" %% "fs2-core" % "1.0.2"
+  val `fs2-io` = "co.fs2" %% "fs2-io" % "1.0.2"
 
   // https://github.com/monix/minitest
   // Apache 2.0
