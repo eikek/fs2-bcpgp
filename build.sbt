@@ -52,7 +52,7 @@ lazy val publishSettings = Seq(
   releasePublishArtifactsAction := PgpKeys.publishSigned.value
 )
 
-lazy val coreDeps = Seq(`cats-core`, `fs2-core`, `fs2-io`)
+lazy val coreDeps = Seq(`cats-core`, `cats-effect`, `fs2-core`, `fs2-io`)
 lazy val testDeps = Seq(minitest, `minitest-laws`, `logback-classic`).map(_ % "test")
 
 lazy val pgp = project.in(file("modules/pgp")).

@@ -42,21 +42,21 @@ object EncryptSpec extends SimpleTestSuite with FileFixtures with Imports.Defaul
         intersperse("\n").
         take(800L).
         through(text.utf8Encode).
-        to(io.file.writeAll[IO](f, blockingEC)).
+        through(io.file.writeAll[IO](f, blockingEC)).
         compile.drain
 
     // encrypt
     def encryptFile(from: Path, to: Path) =
       io.file.readAll[IO](from, blockingEC, 96 * 1024).
         through(encrypt.pubkey[IO](key, chunkSize, blockingEC)).
-        to(io.file.writeAll[IO](to, blockingEC)).
+        through(io.file.writeAll[IO](to, blockingEC)).
         compile.drain
 
     // decrypt
     def decryptFile(from: Path, to: Path) =
       io.file.readAll[IO](from, blockingEC, 96 * 1024).
         through(decrypt.pubkey[IO](ks, _ => "test".toCharArray, blockingEC)).
-        to(io.file.writeAll[IO](to, blockingEC)).
+        through(io.file.writeAll[IO](to, blockingEC)).
         compile.drain
 
     val test = withNonExistingFile { f1 =>

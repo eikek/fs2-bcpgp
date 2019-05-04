@@ -124,7 +124,7 @@ object encrypt {
           cout.close()
           out.close()
         }}).flatMap({ case (out, cout, pout) =>
-          in.to(io.writeOutputStream(F.pure(pout), blockingEc, closeAfterUse = false))
+          in.through(io.writeOutputStream(F.pure(pout), blockingEc, closeAfterUse = false))
         })
 
       Stream.suspend {
