@@ -1,12 +1,12 @@
 package fs2bcpgp
 
-import scala.concurrent.ExecutionContext
 import java.util.concurrent.Executors
+import scala.concurrent.ExecutionContext
 import cats.effect._
 
 trait Imports {
 
-  def blockingEC: ExecutionContext
+  def blocker: Blocker
 
   implicit def contextShift: ContextShift[IO]
 
@@ -16,7 +16,8 @@ object Imports {
 
   trait Defaults extends Imports {
 
-    def blockingEC = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
+    val blockingEC = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
+    val blocker = Blocker.liftExecutionContext(blockingEC)
 
     implicit def contextShift: ContextShift[IO] =
       IO.contextShift(ExecutionContext.global)

@@ -1,6 +1,6 @@
 package fs2bcpgp
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scodec.bits.ByteVector
 import cats.effect.Sync
 import cats.data.NonEmptyList

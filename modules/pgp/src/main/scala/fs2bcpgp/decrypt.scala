@@ -5,9 +5,8 @@ import org.bouncycastle.openpgp._
 import org.bouncycastle.openpgp.jcajce._
 import org.bouncycastle.openpgp.operator.jcajce._
 import org.bouncycastle.util.io.Streams
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
-import scala.concurrent.ExecutionContext
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -29,10 +28,10 @@ object decrypt {
   }
 
   private def readPGP[F[_]: Sync: ContextShift]
-    (bufferSize: Int, blockingEc: ExecutionContext): Pipe[F, InputStream, Byte] =
+    (bufferSize: Int, blocker: Blocker): Pipe[F, InputStream, Byte] =
     _.flatMap { clear =>
       val unc = unwrapPGP(clear)
-      io.readInputStream(Sync[F].pure(unc), bufferSize, blockingEc)
+      io.readInputStream(Sync[F].pure(unc), bufferSize, blocker)
     }
 
   private def makeEncData[A <: PGPEncryptedData](in: InputStream): Iterator[A] = {
@@ -92,7 +91,7 @@ object decrypt {
   }
 
   def pubkey[F[_]: ConcurrentEffect: RaiseThrowable: ContextShift]
-    (ks: Keystore, pass: Long => Array[Char], blockingEc: ExecutionContext): Pipe[F, Byte, Byte] = in => {
+    (ks: Keystore, pass: Long => Array[Char], blocker: Blocker): Pipe[F, Byte, Byte] = in => {
     val clearText: Stream[F, InputStream] = in.
       through(encryptedData[F, PGPPublicKeyEncryptedData]).
       flatMap { pgpobj =>
@@ -105,11 +104,11 @@ object decrypt {
         }
       }
 
-    clearText.through(readPGP(8192, blockingEc))
+    clearText.through(readPGP(8192, blocker))
   }
 
   def symmetric[F[_]: ConcurrentEffect : ContextShift]
-    (pass: Array[Char], blockingEc: ExecutionContext): Pipe[F, Byte, Byte] = in => {
+    (pass: Array[Char], blocker: Blocker): Pipe[F, Byte, Byte] = in => {
     val clearText: Stream[F, InputStream] = in.
       through(encryptedData[F, PGPPBEEncryptedData]).
       evalMap { pgpobj =>
@@ -120,6 +119,6 @@ object decrypt {
           .setProvider(Provider.name).build(pass)))
       }
 
-    clearText.through(readPGP(8192, blockingEc))
+    clearText.through(readPGP(8192, blocker))
   }
 }

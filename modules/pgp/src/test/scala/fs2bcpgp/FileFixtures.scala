@@ -3,7 +3,7 @@ package fs2bcpgp
 import fs2.io
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import cats.effect.IO
 
 import minitest.api.Asserts
@@ -37,7 +37,7 @@ trait FileFixtures {
   }
 
   def fileHash(f: Path): IO[String] =
-    io.file.readAll[IO](f, blockingEC, 96 * 1024).
+    io.file.readAll[IO](f, blocker, 96 * 1024).
       through(fs2.hash.sha1).
       map(b => "%x".format(b)).
       fold1(_ ++ _).

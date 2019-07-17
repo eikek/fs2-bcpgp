@@ -6,7 +6,6 @@ import org.bouncycastle.openpgp._
 import org.bouncycastle.openpgp.operator.jcajce._
 import org.bouncycastle.util.io.Streams
 
-import scala.concurrent.ExecutionContext
 import cats.implicits._
 import cats.effect._
 //import cats.effect.implicits._
@@ -61,21 +60,21 @@ object encrypt {
 
   def pubkey[F[_]](key: Pubkey
     , chunkSize: Int
-    , blockingEc: ExecutionContext
+    , blocker: Blocker
     , name: String = "")(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Pipe[F, Byte, Byte] =
-    encryptWith[F](makePKEncryptGenerator(key), chunkSize, blockingEc, name)
+    encryptWith[F](makePKEncryptGenerator(key), chunkSize, blocker, name)
 
   def symmetric[F[_]: ConcurrentEffect : ContextShift](algo: SymmetricAlgo
     , pass: Array[Char]
     , chunkSize: Int
-    , blockingEc: ExecutionContext
+    , blocker: Blocker
     , name: String = ""): Pipe[F, Byte, Byte] =
-    encryptWith(makePBEEncryptGenerator(algo, pass), chunkSize, blockingEc, name)
+    encryptWith(makePBEEncryptGenerator(algo, pass), chunkSize, blocker, name)
 
 
   private def encryptWith[F[_]](encGen: PGPEncryptedDataGenerator
     , chunkSize: Int
-    , blockingEc: ExecutionContext
+    , blocker: Blocker
     , name: String)(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Pipe[F, Byte, Byte] = in => {
     Stream.eval(Queue.synchronous[F, Option[Chunk[Byte]]]).flatMap { q =>
 
@@ -124,7 +123,7 @@ object encrypt {
           cout.close()
           out.close()
         }}).flatMap({ case (out, cout, pout) =>
-          in.through(io.writeOutputStream(F.pure(pout), blockingEc, closeAfterUse = false))
+          in.through(io.writeOutputStream(F.pure(pout), blocker, closeAfterUse = false))
         })
 
       Stream.suspend {

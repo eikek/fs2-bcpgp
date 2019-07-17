@@ -2,7 +2,7 @@ package fs2bcpgp
 
 import java.time.{Duration, Instant}
 import org.bouncycastle.openpgp._ //PGPPublicKey
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scodec.bits.ByteVector
 import org.bouncycastle.bcpg.SignatureSubpacketTags
 import org.bouncycastle.bcpg.sig.PreferredAlgorithms

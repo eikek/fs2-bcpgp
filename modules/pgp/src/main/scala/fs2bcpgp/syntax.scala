@@ -2,7 +2,6 @@ package fs2bcpgp
 
 import java.nio.charset.{Charset, StandardCharsets}
 import java.io.{InputStream, OutputStream, ByteArrayInputStream, ByteArrayOutputStream}
-import scala.concurrent.ExecutionContext
 import fs2._
 import cats.effect._
 import cats.implicits._
@@ -11,21 +10,21 @@ import scodec.bits.ByteVector
 object syntax {
 
   implicit class StreamCrypt[F[_]](s: Stream[F, Byte]) {
-    def encryptPubkey(key: Pubkey, chunkSize: Int, blockingEc: ExecutionContext)
+    def encryptPubkey(key: Pubkey, chunkSize: Int, blocker: Blocker)
       (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
-      s.through(encrypt.pubkey(key, chunkSize, blockingEc))
+      s.through(encrypt.pubkey(key, chunkSize, blocker))
 
-    def decryptPubkey(ks: Keystore, pass: Long => Array[Char], blockingEc: ExecutionContext)
+    def decryptPubkey(ks: Keystore, pass: Long => Array[Char], blocker: Blocker)
       (implicit F: ConcurrentEffect[F], ev: RaiseThrowable[F], CS: ContextShift[F]): Stream[F, Byte] =
-      s.through(decrypt.pubkey(ks, pass, blockingEc))
+      s.through(decrypt.pubkey(ks, pass, blocker))
 
-    def encryptSymmetric(pass: Array[Char], chunkSize: Int, blockingEc: ExecutionContext, algo: SymmetricAlgo = SymmetricAlgo.default)
+    def encryptSymmetric(pass: Array[Char], chunkSize: Int, blocker: Blocker, algo: SymmetricAlgo = SymmetricAlgo.default)
       (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
-      s.through(encrypt.symmetric(algo, pass, chunkSize, blockingEc))
+      s.through(encrypt.symmetric(algo, pass, chunkSize, blocker))
 
-    def decryptSymmetric(pass: Array[Char], blockingEc: ExecutionContext)
+    def decryptSymmetric(pass: Array[Char], blocker: Blocker)
       (implicit F: ConcurrentEffect[F], CS: ContextShift[F]): Stream[F, Byte] =
-      s.through(decrypt.symmetric(pass, blockingEc))
+      s.through(decrypt.symmetric(pass, blocker))
   }
 
 

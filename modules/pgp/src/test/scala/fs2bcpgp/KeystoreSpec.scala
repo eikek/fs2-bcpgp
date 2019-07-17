@@ -35,7 +35,7 @@ object KeystoreSpec extends SimpleTestSuite with Imports.Defaults {
 
   test ("Read keystore from inputstream") {
     // generated via `gpg --quick-gen-key`
-    val ks = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
+    val ks = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blocker).unsafeRunSync
     val pubkey = ks.public.findByUserID[IO]("test").unsafeRunSync.get
     assertEquals(pubkey.strength, 2048)
     assertEquals(pubkey.version, 4)
@@ -55,7 +55,7 @@ object KeystoreSpec extends SimpleTestSuite with Imports.Defaults {
 
   test ("Concatenate keystore") {
     val ks0 = generated
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blocker).unsafeRunSync
     val ks = ks0 ++ ks1
 
     val pubkey0 = ks.public.findByUserID[IO]("eike").unsafeRunSync.get
@@ -65,7 +65,7 @@ object KeystoreSpec extends SimpleTestSuite with Imports.Defaults {
   }
 
   test ("serialise / deserialise") {
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blocker).unsafeRunSync
     val ks1str = ks1.armored[IO].flatMap(Keystore.fromArmoredString[IO]).unsafeRunSync
     assertEquals(ks1, ks1str)
 
@@ -75,7 +75,7 @@ object KeystoreSpec extends SimpleTestSuite with Imports.Defaults {
   }
 
   test ("checkPassword") {
-    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blockingEC).unsafeRunSync
+    val ks1 = Keystore.fromInputStream(IO(getClass.getResource("/all.kr").openStream), blocker).unsafeRunSync
     ks1.checkPassword[IO](_ => "test".toCharArray).map({ list1 =>
       assertEquals(list1.size, 1)
       assertEquals(list1(0), -2031006086266986872L -> true)

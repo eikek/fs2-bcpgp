@@ -15,10 +15,8 @@ lazy val sharedSettings = Seq(
     "-unchecked",
     "-language:higherKinds",
     "-Xlint",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
-    "-Ywarn-numeric-widen",
-    "-Ywarn-unused-import"
+    "-Ywarn-numeric-widen"
   ),
   scalacOptions in (Compile, console) ~= (_ filterNot (Set("-Xfatal-warnings", "-Ywarn-unused-import").contains)),
   scalacOptions in (Test) := (scalacOptions in (Compile, console)).value,
@@ -52,7 +50,7 @@ lazy val publishSettings = Seq(
   releasePublishArtifactsAction := PgpKeys.publishSigned.value
 )
 
-lazy val coreDeps = Seq(`cats-core`, `cats-effect`, `fs2-core`, `fs2-io`)
+lazy val coreDeps = Seq(`fs2-core`, `fs2-io`)
 lazy val testDeps = Seq(minitest, `minitest-laws`, `logback-classic`).map(_ % "test")
 
 lazy val pgp = project.in(file("modules/pgp")).
@@ -73,4 +71,7 @@ lazy val pgp = project.in(file("modules/pgp")).
 lazy val root = project.in(file(".")).
   disablePlugins(ReleasePlugin).
   settings(sharedSettings).
+  settings(
+    name := "fs2-bcpgp-root"
+  ).
   aggregate(pgp)

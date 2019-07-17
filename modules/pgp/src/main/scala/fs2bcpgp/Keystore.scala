@@ -5,9 +5,8 @@ import cats.effect._
 import cats.Traverse
 import cats.implicits._
 import fs2._
-import scala.concurrent.ExecutionContext
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.nio.file.{Files, Path}
 import java.io.{InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import java.security.SecureRandom
@@ -112,9 +111,9 @@ object Keystore {
   }
 
   def fromInputStream[F[_]: Sync : ContextShift](in: F[InputStream]
-    , blockingEc: ExecutionContext
+    , blocker: Blocker
     , closeAfterUse: Boolean = true): F[Keystore] =
-    io.readInputStream[F](in, 8192, blockingEc, closeAfterUse).
+    io.readInputStream[F](in, 8192, blocker, closeAfterUse).
       through(text.utf8Decode).
       through(text.lines).
       compile.toVector.flatMap(fromArmoredLines[F])
