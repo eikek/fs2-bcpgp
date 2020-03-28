@@ -1,6 +1,6 @@
 package fs2bcpgp
 
-import scala.jdk.CollectionConverters._
+import ScalaCompat._
 import scodec.bits.ByteVector
 import cats.effect.Sync
 import cats.implicits._
@@ -15,18 +15,20 @@ case class SecretKeys(ring: ByteVector) {
   }
 
   def all[F[_]](implicit F: Sync[F]): F[List[Seckey]] =
-    open.map(_.asScala.map(ring => Seckey(ring.getSecretKey)).toList)
+    open.map(_.toScala.map(ring => Seckey(ring.getSecretKey)).toList)
 
   def find[F[_]](keyID: Long)(implicit F: Sync[F]): F[Option[Seckey]] =
     F.map(open)(k => Option(k.getSecretKey(keyID)).map(Seckey.apply))
 
   def findByUserID[F[_]](userID: String)(implicit F: Sync[F]): F[Option[Seckey]] =
-    F.map(open)(k => k.asScala.filter(SecretKeys.seckeyOf(userID)).toList match {
-      case h :: Nil => Some(Seckey(h.getSecretKey))
-      case _ => None
-    })
+    F.map(open)(k =>
+      k.toScala.filter(SecretKeys.seckeyOf(userID)).toList match {
+        case h :: Nil => Some(Seckey(h.getSecretKey))
+        case _        => None
+      }
+    )
 
-  def armored[F[_]](implicit F: Sync[F])=
+  def armored[F[_]](implicit F: Sync[F]) =
     Keystore.toArmored(ring)
 
   def ++(other: SecretKeys): SecretKeys = SecretKeys(ring ++ other.ring)
@@ -37,10 +39,9 @@ object SecretKeys {
   def readArmored[F[_]](armored: String)(implicit F: Sync[F]): F[SecretKeys] =
     Keystore.fromArmored[F](armored).map(SecretKeys.apply)
 
-
   private def seckeyOf(id: String)(k: PGPSecretKeyRing): Boolean = {
     val sk = k.getSecretKey
-    sk.getUserIDs.asScala.map(_.toString).filter(_ contains id).nonEmpty ||
-      java.lang.Long.toHexString(sk.getKeyID).endsWith(id.toLowerCase)
+    sk.getUserIDs.toScala.map(_.toString).filter(_ contains id).nonEmpty ||
+    java.lang.Long.toHexString(sk.getKeyID).endsWith(id.toLowerCase)
   }
 }

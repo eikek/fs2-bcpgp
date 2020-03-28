@@ -8,10 +8,23 @@ import java.security.SecureRandom
 /** The SCrypt (<a href="http://www.tarsnap.com/scrypt.html">scrypt</a>) from bouncycastle */
 object SCrypt {
 
-  def derive(pass: ByteVector, salt: ByteVector, N: Int, r: Int, p: Int, dklen: Int): ByteVector =
+  def derive(
+      pass: ByteVector,
+      salt: ByteVector,
+      N: Int,
+      r: Int,
+      p: Int,
+      dklen: Int
+  ): ByteVector =
     ByteVector.view(SCryptCastle.generate(pass.toArray, salt.toArray, N, r, p, dklen))
 
-  def scrypt(pass: String, N: Int = 1 << 14, r: Int = 8, p: Int = 1, dklen: Int = 32): String = {
+  def scrypt(
+      pass: String,
+      N: Int = 1 << 14,
+      r: Int = 8,
+      p: Int = 1,
+      dklen: Int = 32
+  ): String = {
     val random = new SecureRandom()
     val salt = {
       val b = new Array[Byte](16)
@@ -23,7 +36,7 @@ object SCrypt {
     s"$$scrypt$$${params}$$${salt.toBase64}$$${dk.toBase64}"
   }
 
-  def check(pass: String, hashed: String): Boolean = {
+  def check(pass: String, hashed: String): Boolean =
     hashed match {
       case SCrypt(params, salt, derived) =>
         val N = 1 << ((params >> 16) & 0xffff).toInt
@@ -35,7 +48,6 @@ object SCrypt {
       case _ =>
         false
     }
-  }
 
   private def unapply(hashed: String): Option[(Long, ByteVector, ByteVector)] =
     hashed.split('$').toList match {
@@ -52,7 +64,7 @@ object SCrypt {
   def isCrypted(s: String): Boolean =
     s match {
       case SCrypt(_, _, _) => true
-      case _ => false
+      case _               => false
     }
 
   private def log2(n: Int) =

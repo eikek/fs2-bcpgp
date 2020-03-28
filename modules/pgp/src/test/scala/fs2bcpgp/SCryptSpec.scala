@@ -7,9 +7,9 @@ object SCryptSpec extends SimpleTestSuite {
   test("derive and check password") {
     val pw = SCrypt.scrypt("testpw")
     assert(SCrypt.check("testpw", pw))
-    assert(! SCrypt.check("testpa", pw))
+    assert(!SCrypt.check("testpa", pw))
     assert(SCrypt.isCrypted(pw))
-    assert(! SCrypt.isCrypted("testpw"))
+    assert(!SCrypt.isCrypted("testpw"))
   }
 
   test("max values for r and p") {
@@ -19,6 +19,6 @@ object SCryptSpec extends SimpleTestSuite {
   }
 
   test("invalid values not throwing") {
-    assert(! SCrypt.check("test", "$scrypt$x$x$x"))
+    assert(!SCrypt.check("test", "$scrypt$x$x$x"))
   }
 }

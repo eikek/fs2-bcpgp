@@ -2,7 +2,7 @@ package fs2bcpgp
 
 import java.time.{Duration, Instant}
 import org.bouncycastle.openpgp._ //PGPPublicKey
-import scala.jdk.CollectionConverters._
+import ScalaCompat._
 import scodec.bits.ByteVector
 import org.bouncycastle.bcpg.SignatureSubpacketTags
 import org.bouncycastle.bcpg.sig.PreferredAlgorithms
@@ -15,7 +15,9 @@ case class Pubkey(pbk: PGPPublicKey) {
 
   val fingerprint = ByteVector.view(pbk.getFingerprint)
 
-  val algorithm = AsymmetricAlgo.allByTag.get(pbk.getAlgorithm).getOrElse(AsymmetricAlgo(pbk.getAlgorithm, ""))
+  val algorithm = AsymmetricAlgo.allByTag
+    .get(pbk.getAlgorithm)
+    .getOrElse(AsymmetricAlgo(pbk.getAlgorithm, ""))
 
   val strength = pbk.getBitStrength
 
@@ -25,7 +27,7 @@ case class Pubkey(pbk: PGPPublicKey) {
 
   val validity = Duration.ofSeconds(pbk.getValidSeconds)
 
-  val userIDs = pbk.getUserIDs.asScala.toList
+  val userIDs = pbk.getUserIDs.toScala.toList
 
   val isEncryptionKey = pbk.isEncryptionKey
   val isMasterKey = pbk.isMasterKey
@@ -34,11 +36,15 @@ case class Pubkey(pbk: PGPPublicKey) {
 
   lazy val preferedAlgorithms: List[SymmetricAlgo] = {
     for {
-      sig <- pbk.getSignatures.asScala.asInstanceOf[Iterator[PGPSignature]]
-      pck <- sig.getHashedSubPackets().getSubpacket(SignatureSubpacketTags.PREFERRED_SYM_ALGS) match {
-        case pa: PreferredAlgorithms =>
-          pa.getPreferences.toList.map(SymmetricAlgo.allByTag.get).collect({case Some(x) => x })
-      }
+      sig <- pbk.getSignatures.toScala.asInstanceOf[Iterator[PGPSignature]]
+      pck <- sig
+              .getHashedSubPackets()
+              .getSubpacket(SignatureSubpacketTags.PREFERRED_SYM_ALGS) match {
+              case pa: PreferredAlgorithms =>
+                pa.getPreferences.toList
+                  .map(SymmetricAlgo.allByTag.get)
+                  .collect({ case Some(x) => x })
+            }
     } yield pck
   }.toList
 

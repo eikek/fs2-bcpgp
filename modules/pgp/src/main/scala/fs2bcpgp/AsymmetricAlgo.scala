@@ -24,7 +24,7 @@ object AsymmetricAlgo {
     "ELGAMALGENERAL" -> ElgamalGeneral,
     "RSAENCRYPT" -> RsaEncrypt,
     "RSAGENERAL" -> RsaGeneral,
-    "RSASIGN" -> RsaSign,
+    "RSASIGN" -> RsaSign
   )
 
   val allByTag = all.values.map(a => (a.tag, a)).toMap

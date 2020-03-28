@@ -1,6 +1,6 @@
 package fs2bcpgp
 
-import scala.jdk.CollectionConverters._
+import ScalaCompat._
 import cats.effect.Sync
 import scodec.bits.ByteVector
 
@@ -12,12 +12,17 @@ case class Seckey(psk: PGPSecretKey) {
   val keyId = psk.getKeyID
   val id = ByteVector.fromLong(keyId).toHex
 
-  val userIDs = psk.getUserIDs.asScala.toList
+  val userIDs = psk.getUserIDs.toScala.toList
 
   def pubKey = Pubkey(psk.getPublicKey)
 
-  def extractPrivateKey[F[_]](pass: Array[Char])(implicit F: Sync[F]): F[PrivateKey] = F.delay {
-    PrivateKey(psk.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder().setProvider(Provider.name).build(pass)))
-  }
+  def extractPrivateKey[F[_]](pass: Array[Char])(implicit F: Sync[F]): F[PrivateKey] =
+    F.delay {
+      PrivateKey(
+        psk.extractPrivateKey(
+          new JcePBESecretKeyDecryptorBuilder().setProvider(Provider.name).build(pass)
+        )
+      )
+    }
 
 }

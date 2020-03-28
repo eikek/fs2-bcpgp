@@ -3,7 +3,7 @@ package fs2bcpgp
 import fs2.io
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
-import scala.jdk.CollectionConverters._
+import ScalaCompat._
 import cats.effect.IO
 
 import minitest.api.Asserts
@@ -22,28 +22,25 @@ trait FileFixtures {
     prg.flatMap(_.fold(IO.raiseError, IO.pure))
   }
 
-  def withExistingFile[A](code: Path => IO[A]): IO[A] = {
-    withNonExistingFile { file =>
-      IO(Files.createFile(file)).flatMap(_ => code(file))
-    }
-  }
+  def withExistingFile[A](code: Path => IO[A]): IO[A] =
+    withNonExistingFile(file => IO(Files.createFile(file)).flatMap(_ => code(file)))
 
-  def withFileContents[A](cnt: String)(code: Path => IO[A]): IO[A] = {
+  def withFileContents[A](cnt: String)(code: Path => IO[A]): IO[A] =
     withNonExistingFile { file =>
-      IO(Files.write(file, cnt.getBytes("UTF-8"))).
-        flatMap(_ => IO(assertFileNonEmpty(file))).
-        flatMap(_ => code(file))
+      IO(Files.write(file, cnt.getBytes("UTF-8")))
+        .flatMap(_ => IO(assertFileNonEmpty(file)))
+        .flatMap(_ => code(file))
     }
-  }
 
   def fileHash(f: Path): IO[String] =
-    io.file.readAll[IO](f, blocker, 96 * 1024).
-      through(fs2.hash.sha1).
-      map(b => "%x".format(b)).
-      fold1(_ ++ _).
-      compile.last.
-      map(_.get)
-
+    io.file
+      .readAll[IO](f, blocker, 96 * 1024)
+      .through(fs2.hash.sha1)
+      .map(b => "%x".format(b))
+      .fold1(_ ++ _)
+      .compile
+      .last
+      .map(_.get)
 
   def fileSize(f: Path): Long = Files.size(f)
 
@@ -58,9 +55,12 @@ trait FileFixtures {
 
   def assertFileNonEmpty(f: Path): Unit = {
     assert(fileExits(f), s"File $f expected to be non empty, but it doesn't exist")
-    assert(fileSize(f) > 0, s"File $f expected to be non empty, but it's length is ${fileSize(f)}")
+    assert(
+      fileSize(f) > 0,
+      s"File $f expected to be non empty, but it's length is ${fileSize(f)}"
+    )
   }
 
   def fileContentsUtf8(f: Path): String =
-    Files.readAllLines(f).asScala.mkString("\n")
+    Files.readAllLines(f).toScala.mkString("\n")
 }
